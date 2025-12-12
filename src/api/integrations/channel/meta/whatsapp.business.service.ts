@@ -45,10 +45,40 @@ export class BusinessStartupService extends ChannelStartupService {
     super(configService, eventEmitter, prismaRepository, chatwootCache);
   }
 
+  private fullToken: string | null = null;
+
   public stateConnection: wa.StateConnection = { state: 'open' };
 
   public phoneNumber: string;
   public mobile: boolean;
+
+  // Override token getter para retornar token completo se disponível
+  public get token(): string {
+    return this.fullToken || this.instance.token || '';
+  }
+
+  // Override setInstance para armazenar/carregar token completo
+  public async setInstance(instance: any) {
+    super.setInstance(instance);
+
+    // Se o token fornecido é maior que 255, é o token completo - armazena imediatamente
+    if (instance.token && instance.token.length > 255) {
+      this.fullToken = instance.token;
+      const cacheKey = `instance:${instance.instanceName}:fullToken`;
+      await this.cache.set(cacheKey, instance.token, 0);
+      this.logger.log(`Stored full token in cache for ${instance.instanceName}`);
+    } else {
+      // Tenta carregar token completo do cache
+      const cacheKey = `instance:${instance.instanceName}:fullToken`;
+      const fullToken = await this.cache.get(cacheKey);
+      if (fullToken) {
+        this.fullToken = fullToken;
+        this.logger.log(`Loaded full token from cache for ${instance.instanceName}`);
+      } else {
+        this.logger.warn(`Full token not found in cache for ${instance.instanceName}, using truncated token`);
+      }
+    }
+  }
 
   public get connectionStatus() {
     return this.stateConnection;

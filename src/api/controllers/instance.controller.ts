@@ -72,14 +72,26 @@ export class InstanceController {
         status: instanceData.status,
       });
 
-      instance.setInstance({
-        instanceName: instanceData.instanceName,
-        instanceId,
-        integration: instanceData.integration,
-        token: hash,
-        number: instanceData.number,
-        businessId: instanceData.businessId,
-      });
+      // Para WhatsApp Business, setInstance é async e precisa ser aguardado
+      if (instanceData.integration === Integration.WHATSAPP_BUSINESS) {
+        await (instance as any).setInstance({
+          instanceName: instanceData.instanceName,
+          instanceId,
+          integration: instanceData.integration,
+          token: instanceData.token || hash, // Usa o token original completo
+          number: instanceData.number,
+          businessId: instanceData.businessId,
+        });
+      } else {
+        instance.setInstance({
+          instanceName: instanceData.instanceName,
+          instanceId,
+          integration: instanceData.integration,
+          token: hash,
+          number: instanceData.number,
+          businessId: instanceData.businessId,
+        });
+      }
 
       this.waMonitor.waInstances[instance.instanceName] = instance;
       this.waMonitor.delInstanceTime(instance.instanceName);

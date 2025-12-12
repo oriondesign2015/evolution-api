@@ -9,8 +9,10 @@ export class AuthService {
       return true;
     }
 
+    // Compara apenas os primeiros 255 caracteres para verificar duplicatas
+    const tokenToCompare = token.length > 255 ? token.substring(0, 255) : token;
     const instances = await this.prismaRepository.instance.findMany({
-      where: { token },
+      where: { token: tokenToCompare },
     });
 
     if (instances.length > 0) {

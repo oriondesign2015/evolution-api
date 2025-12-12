@@ -52,7 +52,8 @@ export class WebsocketController extends EventController implements EventControl
             return callback('apiKey is required', false);
           }
 
-          const instance = await this.prismaRepository.instance.findFirst({ where: { token: apiKey } });
+          const keyToCompare = apiKey.length > 255 ? apiKey.substring(0, 255) : apiKey;
+          const instance = await this.prismaRepository.instance.findFirst({ where: { token: keyToCompare } });
 
           if (!instance) {
             const globalToken = configService.get<Auth>('AUTHENTICATION').API_KEY.KEY;

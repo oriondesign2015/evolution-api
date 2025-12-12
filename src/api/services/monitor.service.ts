@@ -239,26 +239,37 @@ export class WAMonitoringService {
   }
 
   public async saveInstance(data: any) {
+    const truncate = (str: string | null | undefined, maxLength: number): string | null => {
+      if (!str) return null;
+      return str.length > maxLength ? str.substring(0, maxLength) : str;
+    };
+
     try {
-      const clientName = await this.configService.get<Database>('DATABASE').CONNECTION.CLIENT_NAME;
+      const instanceName = truncate(data.instanceName, 255);
+      if (!instanceName || instanceName.trim().length === 0) {
+        throw new Error('instanceName is required and cannot be empty');
+      }
+
+      const clientName = this.configService.get<Database>('DATABASE').CONNECTION.CLIENT_NAME;
       await this.prismaRepository.instance.create({
         data: {
           id: data.instanceId,
-          name: data.instanceName,
-          ownerJid: data.ownerJid,
-          profileName: data.profileName,
-          profilePicUrl: data.profilePicUrl,
+          name: instanceName,
+          ownerJid: truncate(data.ownerJid, 100),
+          profileName: truncate(data.profileName, 100),
+          profilePicUrl: truncate(data.profilePicUrl, 500),
           connectionStatus:
             data.integration && data.integration === Integration.WHATSAPP_BAILEYS ? 'close' : (data.status ?? 'open'),
-          number: data.number,
-          integration: data.integration || Integration.WHATSAPP_BAILEYS,
-          token: data.hash,
-          clientName: clientName,
-          businessId: data.businessId,
+          number: truncate(data.number, 100),
+          integration: truncate(data.integration || Integration.WHATSAPP_BAILEYS, 100),
+          token: truncate(data.hash, 255),
+          clientName: truncate(clientName, 100),
+          businessId: truncate(data.businessId, 100),
         },
       });
     } catch (error) {
       this.logger.error(error);
+      throw error;
     }
   }
 
@@ -283,15 +294,31 @@ export class WAMonitoringService {
 
     if (!instance) return;
 
-    instance.setInstance({
-      instanceId: instanceData.instanceId,
-      instanceName: instanceData.instanceName,
-      integration: instanceData.integration,
-      token: instanceData.token,
-      number: instanceData.number,
-      businessId: instanceData.businessId,
-      ownerJid: instanceData.ownerJid,
-    });
+    // Para WhatsApp Business, setInstance é async e precisa ser aguardado
+    if (instanceData.integration === Integration.WHATSAPP_BUSINESS) {
+      const setInstanceResult = (instance as any).setInstance({
+        instanceId: instanceData.instanceId,
+        instanceName: instanceData.instanceName,
+        integration: instanceData.integration,
+        token: instanceData.token,
+        number: instanceData.number,
+        businessId: instanceData.businessId,
+        ownerJid: instanceData.ownerJid,
+      });
+      if (setInstanceResult instanceof Promise) {
+        await setInstanceResult;
+      }
+    } else {
+      instance.setInstance({
+        instanceId: instanceData.instanceId,
+        instanceName: instanceData.instanceName,
+        integration: instanceData.integration,
+        token: instanceData.token,
+        number: instanceData.number,
+        businessId: instanceData.businessId,
+        ownerJid: instanceData.ownerJid,
+      });
+    }
 
     if (instanceData.connectionStatus === 'open' || instanceData.connectionStatus === 'connecting') {
       this.logger.info(
@@ -321,11 +348,21 @@ export class WAMonitoringService {
             return;
           }
 
+          // Para WhatsApp Business, tenta carregar token completo do cache
+          let token = instanceData.token;
+          if (instanceData.integration === Integration.WHATSAPP_BUSINESS) {
+            const cacheKey = `instance:${instanceData.name}:fullToken`;
+            const fullToken = await this.cache.get(cacheKey);
+            if (fullToken) {
+              token = fullToken;
+            }
+          }
+
           const instance = {
             instanceId: k.split(':')[1],
             instanceName: k.split(':')[2],
             integration: instanceData.integration,
-            token: instanceData.token,
+            token: token,
             number: instanceData.number,
             businessId: instanceData.businessId,
             connectionStatus: instanceData.connectionStatus as any, // Pass connection status
@@ -350,11 +387,21 @@ export class WAMonitoringService {
 
     await Promise.all(
       instances.map(async (instance) => {
+        // Para WhatsApp Business, tenta carregar token completo do cache
+        let token = instance.token;
+        if (instance.integration === Integration.WHATSAPP_BUSINESS) {
+          const cacheKey = `instance:${instance.name}:fullToken`;
+          const fullToken = await this.cache.get(cacheKey);
+          if (fullToken) {
+            token = fullToken;
+          }
+        }
+
         this.setInstance({
           instanceId: instance.id,
           instanceName: instance.name,
           integration: instance.integration,
-          token: instance.token,
+          token: token,
           number: instance.number,
           businessId: instance.businessId,
           ownerJid: instance.ownerJid,
@@ -377,11 +424,21 @@ export class WAMonitoringService {
           where: { id: instanceId },
         });
 
+        // Para WhatsApp Business, tenta carregar token completo do cache
+        let token = instance.token;
+        if (instance.integration === Integration.WHATSAPP_BUSINESS) {
+          const cacheKey = `instance:${instance.name}:fullToken`;
+          const fullToken = await this.cache.get(cacheKey);
+          if (fullToken) {
+            token = fullToken;
+          }
+        }
+
         this.setInstance({
           instanceId: instance.id,
           instanceName: instance.name,
           integration: instance.integration,
-          token: instance.token,
+          token: token,
           businessId: instance.businessId,
           connectionStatus: instance.connectionStatus as any, // Pass connection status
         });

@@ -157,41 +157,49 @@ export class ChannelStartupService {
   }
 
   public async setSettings(data: SettingsDto) {
+    const truncate = (str: string | null | undefined, maxLength: number): string | null => {
+      if (!str) return null;
+      return str.length > maxLength ? str.substring(0, maxLength) : str;
+    };
+
+    const msgCall = truncate(data.msgCall, 100);
+    const wavoipToken = truncate(data.wavoipToken, 100);
+
     await this.prismaRepository.setting.upsert({
       where: {
         instanceId: this.instanceId,
       },
       update: {
         rejectCall: data.rejectCall,
-        msgCall: data.msgCall,
+        msgCall: msgCall,
         groupsIgnore: data.groupsIgnore,
         alwaysOnline: data.alwaysOnline,
         readMessages: data.readMessages,
         readStatus: data.readStatus,
         syncFullHistory: data.syncFullHistory,
-        wavoipToken: data.wavoipToken,
+        wavoipToken: wavoipToken,
       },
       create: {
         rejectCall: data.rejectCall,
-        msgCall: data.msgCall,
+        msgCall: msgCall,
         groupsIgnore: data.groupsIgnore,
         alwaysOnline: data.alwaysOnline,
         readMessages: data.readMessages,
         readStatus: data.readStatus,
         syncFullHistory: data.syncFullHistory,
-        wavoipToken: data.wavoipToken,
+        wavoipToken: wavoipToken,
         instanceId: this.instanceId,
       },
     });
 
     this.localSettings.rejectCall = data?.rejectCall;
-    this.localSettings.msgCall = data?.msgCall;
+    this.localSettings.msgCall = msgCall;
     this.localSettings.groupsIgnore = data?.groupsIgnore;
     this.localSettings.alwaysOnline = data?.alwaysOnline;
     this.localSettings.readMessages = data?.readMessages;
     this.localSettings.readStatus = data?.readStatus;
     this.localSettings.syncFullHistory = data?.syncFullHistory;
-    this.localSettings.wavoipToken = data?.wavoipToken;
+    this.localSettings.wavoipToken = wavoipToken;
 
     if (this.localSettings.wavoipToken && this.localSettings.wavoipToken.length > 0) {
       this.client.ws.close();
